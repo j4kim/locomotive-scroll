@@ -1,4 +1,4 @@
-/* locomotive-scroll v4.1.3 | MIT License | https://github.com/locomotivemtl/locomotive-scroll */
+/* locomotive-scroll v4.1.4 | MIT License | https://github.com/locomotivemtl/locomotive-scroll */
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
   typeof define === 'function' && define.amd ? define(factory) :
@@ -261,6 +261,7 @@
     el: document,
     name: 'scroll',
     offset: [0, 0],
+    rotate: [],
     repeat: false,
     smooth: false,
     initPosition: {
@@ -1283,7 +1284,7 @@
        *
        * @param  Available options :
        *          target {node, string, "top", "bottom", int} - The DOM element we want to scroll to
-       *          options {object} - Options object for additionnal settings.
+       *          options {object} - Options object for additional settings.
        * @return {void}
        */
 
@@ -1894,6 +1895,9 @@
   function lerp(start, end, amt) {
     return (1 - amt) * start + amt * end;
   }
+  function map(value, min0, max0, min1, max1) {
+    return min1 + (value - min0) / (max0 - min0) * (max1 - min1);
+  }
 
   function getTranslate(el) {
     var translate = {};
@@ -2076,6 +2080,7 @@
       _this.isTicking = false;
       _this.hasScrollTicking = false;
       _this.parallaxElements = {};
+      _this.rotateElements = {};
       _this.stop = false;
       _this.scrollbarContainer = options.scrollbarContainer;
       _this.checkKey = _this.checkKey.bind(_assertThisInitialized(_this));
@@ -2127,6 +2132,7 @@
         this.addElements();
         this.checkScroll(true);
         this.transformElements(true, true);
+        this.transformRotateElements(true, true);
 
         _get(_getPrototypeOf(_default.prototype), "init", this).call(this);
       }
@@ -2298,9 +2304,17 @@
 
             if (section.persistent || _this4.instance.scroll[_this4.directionAxis] > section.offset[_this4.directionAxis] && _this4.instance.scroll[_this4.directionAxis] < section.limit[_this4.directionAxis]) {
               if (_this4.direction === 'horizontal') {
-                _this4.transform(section.el, -_this4.instance.scroll[_this4.directionAxis], 0);
+                _this4.transform({
+                  element: section.el,
+                  x: -_this4.instance.scroll[_this4.directionAxis],
+                  y: 0
+                });
               } else {
-                _this4.transform(section.el, 0, -_this4.instance.scroll[_this4.directionAxis]);
+                _this4.transform({
+                  element: section.el,
+                  x: 0,
+                  y: -_this4.instance.scroll[_this4.directionAxis]
+                });
               }
 
               if (!section.inView) {
@@ -2317,7 +2331,11 @@
                 section.el.removeAttribute("data-".concat(_this4.name, "-section-inview"));
               }
 
-              _this4.transform(section.el, 0, 0);
+              _this4.transform({
+                element: section.el,
+                x: 0,
+                y: 0
+              });
             }
           });
 
@@ -2332,14 +2350,23 @@
 
           this.detectElements();
           this.transformElements();
+          this.transformRotateElements();
 
           if (this.hasScrollbar) {
             var scrollBarTranslation = this.instance.scroll[this.directionAxis] / this.instance.limit[this.directionAxis] * this.scrollBarLimit[this.directionAxis];
 
             if (this.direction === 'horizontal') {
-              this.transform(this.scrollbarThumb, scrollBarTranslation, 0);
+              this.transform({
+                element: this.scrollbarThumb,
+                x: scrollBarTranslation,
+                y: 0
+              });
             } else {
-              this.transform(this.scrollbarThumb, 0, scrollBarTranslation);
+              this.transform({
+                element: this.scrollbarThumb,
+                x: 0,
+                y: scrollBarTranslation
+              });
             }
           }
 
@@ -2564,7 +2591,9 @@
         var _this6 = this;
 
         this.els = {};
-        this.parallaxElements = {}; // this.sections.forEach((section, y) => {
+        this.parallaxElements = {};
+        this.rotateElements = {};
+        console.log("add"); // this.sections.forEach((section, y) => {
 
         var els = this.el.querySelectorAll("[data-".concat(this.name, "]"));
         els.forEach(function (el, index) {
@@ -2588,6 +2617,7 @@
           var position = el.dataset[_this6.name + 'Position'];
           var delay = el.dataset[_this6.name + 'Delay'];
           var direction = el.dataset[_this6.name + 'Direction'];
+          var rotate = typeof el.dataset[_this6.name + 'Rotate'] === 'string' ? el.dataset[_this6.name + 'Rotate'].split(',') : _this6.rotate;
           var sticky = typeof el.dataset[_this6.name + 'Sticky'] === 'string';
           var speed = el.dataset[_this6.name + 'Speed'] ? parseFloat(el.dataset[_this6.name + 'Speed']) / 10 : false;
           var offset = typeof el.dataset[_this6.name + 'Offset'] === 'string' ? el.dataset[_this6.name + 'Offset'].split(',') : _this6.offset;
@@ -2704,7 +2734,8 @@
             position: position,
             target: targetEl,
             direction: direction,
-            sticky: sticky
+            sticky: sticky,
+            rotate: rotate
           };
           _this6.els[id] = mappedEl;
 
@@ -2714,6 +2745,10 @@
 
           if (speed !== false || sticky) {
             _this6.parallaxElements[id] = mappedEl;
+          }
+
+          if (rotate && rotate.length > 1) {
+            _this6.rotateElements[id] = mappedEl;
           }
         }); // });
       }
@@ -2755,7 +2790,11 @@
       }
     }, {
       key: "transform",
-      value: function transform(element, x, y, delay) {
+      value: function transform(_ref5) {
+        var element = _ref5.element,
+            x = _ref5.x,
+            y = _ref5.y,
+            delay = _ref5.delay;
         var transform;
 
         if (!delay) {
@@ -2783,10 +2822,10 @@
           x: this.instance.scroll.x + this.windowMiddle.x,
           y: this.instance.scroll.y + this.windowMiddle.y
         };
-        Object.entries(this.parallaxElements).forEach(function (_ref5) {
-          var _ref6 = _slicedToArray(_ref5, 2),
-              i = _ref6[0],
-              current = _ref6[1];
+        Object.entries(this.parallaxElements).forEach(function (_ref6) {
+          var _ref7 = _slicedToArray(_ref6, 2),
+              i = _ref7[0],
+              current = _ref7[1];
 
           var transformDistance = false;
 
@@ -2856,26 +2895,87 @@
 
           if (transformDistance !== false) {
             if (current.direction === 'horizontal' || _this8.direction === 'horizontal' && current.direction !== 'vertical') {
-              _this8.transform(current.el, transformDistance, 0, isForced ? false : current.delay);
+              _this8.transform({
+                element: current.el,
+                x: transformDistance,
+                y: 0,
+                delay: isForced ? false : current.delay
+              });
             } else {
-              _this8.transform(current.el, 0, transformDistance, isForced ? false : current.delay);
+              _this8.transform({
+                element: current.el,
+                x: 0,
+                y: transformDistance,
+                delay: isForced ? false : current.delay
+              });
             }
           }
         });
+      }
+    }, {
+      key: "transformRotateElements",
+      value: function transformRotateElements(isForced) {
+        var _this9 = this;
+
+        var setAllElements = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+        Object.entries(this.rotateElements).forEach(function (_ref8) {
+          var _ref9 = _slicedToArray(_ref8, 2),
+              i = _ref9[0],
+              current = _ref9[1];
+
+          if (current.inView || setAllElements) {
+            _this9.transformRotate({
+              element: current.el,
+              rotate: isForced ? [0, 0] : current.rotate,
+              progress: current.progress
+            });
+          }
+        });
+      }
+    }, {
+      key: "transformRotate",
+      value: function transformRotate(_ref10) {
+        var element = _ref10.element,
+            rotate = _ref10.rotate,
+            progress = _ref10.progress;
+        var degrees = map(progress, 0, 1, parseInt(rotate[0]), parseInt(rotate[1]));
+        var matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+        var _getTranslate = getTranslate(element),
+            x = _getTranslate.x,
+            y = _getTranslate.y;
+
+        var toRadian = function toRadian(degrees) {
+          var pi = Math.PI;
+          return degrees * (pi / 180);
+        }; // Rotate
+
+
+        matrix[0] = Math.cos(toRadian(degrees));
+        matrix[1] = Math.sin(toRadian(degrees));
+        matrix[4] = -Math.sin(toRadian(degrees));
+        matrix[5] = Math.cos(toRadian(degrees)); // X / Y
+
+        matrix[12] = x;
+        matrix[13] = y;
+        var transform = "matrix3d(".concat(matrix.join(','), ")");
+        element.style.webkitTransform = transform;
+        element.style.msTransform = transform;
+        element.style.transform = transform;
       }
       /**
        * Scroll to a desired target.
        *
        * @param  Available options :
        *          target {node, string, "top", "bottom", int} - The DOM element we want to scroll to
-       *          options {object} - Options object for additionnal settings.
+       *          options {object} - Options object for additional settings.
        * @return {void}
        */
 
     }, {
       key: "scrollTo",
       value: function scrollTo(target) {
-        var _this9 = this;
+        var _this10 = this;
 
         var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
         // Parse options
@@ -2933,11 +3033,11 @@
 
           var targetParents = getParents(target);
           var parentSection = targetParents.find(function (candidate) {
-            return Object.entries(_this9.sections) // Get sections associative array as a regular array
-            .map(function (_ref7) {
-              var _ref8 = _slicedToArray(_ref7, 2),
-                  key = _ref8[0],
-                  section = _ref8[1];
+            return Object.entries(_this10.sections) // Get sections associative array as a regular array
+            .map(function (_ref11) {
+              var _ref12 = _slicedToArray(_ref11, 2),
+                  key = _ref12[0],
+                  section = _ref12[1];
 
               return section;
             }) // map to section only (we dont need the key here)
@@ -2974,13 +3074,13 @@
 
         var render = function render(p) {
           if (disableLerp) {
-            if (_this9.direction === 'horizontal') {
-              _this9.setScroll(scrollStart + scrollDiff * p, _this9.instance.delta.y);
+            if (_this10.direction === 'horizontal') {
+              _this10.setScroll(scrollStart + scrollDiff * p, _this10.instance.delta.y);
             } else {
-              _this9.setScroll(_this9.instance.delta.x, scrollStart + scrollDiff * p);
+              _this10.setScroll(_this10.instance.delta.x, scrollStart + scrollDiff * p);
             }
           } else {
-            _this9.instance.delta[_this9.directionAxis] = scrollStart + scrollDiff * p;
+            _this10.instance.delta[_this10.directionAxis] = scrollStart + scrollDiff * p;
           }
         }; // Prepare the scroll
 
@@ -3000,11 +3100,11 @@
           if (p > 1) {
             // Animation ends
             render(1);
-            _this9.animatingScroll = false;
-            if (duration == 0) _this9.update();
+            _this10.animatingScroll = false;
+            if (duration == 0) _this10.update();
             if (callback) callback();
           } else {
-            _this9.scrollToRaf = requestAnimationFrame(loop);
+            _this10.scrollToRaf = requestAnimationFrame(loop);
             render(easing(p));
           }
         };
@@ -3020,6 +3120,7 @@
         this.detectElements();
         this.updateScroll();
         this.transformElements(true);
+        this.transformRotateElements(true);
         this.reinitScrollBar();
         this.checkScroll(true);
       }

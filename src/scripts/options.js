@@ -2,6 +2,7 @@ export const defaults = {
     el: document,
     name: 'scroll',
     offset: [0, 0],
+    rotate: [],
     repeat: false,
     smooth: false,
     initPosition: { x: 0, y: 0 },

@@ -1,9 +1,10 @@
 import virtualScroll from 'virtual-scroll';
 import Core from './Core';
-import { lerp } from './utils/maths';
+import { lerp, map } from './utils/maths';
 import { getTranslate } from './utils/transform';
 import { getParents, queryClosestParent } from './utils/html';
 import BezierEasing from 'bezier-easing';
+import * as Rematrix from 'rematrix'
 
 const keyCodes = {
     LEFT: 37,
@@ -33,6 +34,7 @@ export default class extends Core {
         this.isTicking = false;
         this.hasScrollTicking = false;
         this.parallaxElements = {};
+        this.rotateElements = {};
         this.stop = false;
         this.scrollbarContainer = options.scrollbarContainer;
 
@@ -85,6 +87,7 @@ export default class extends Core {
 
         this.checkScroll(true);
         this.transformElements(true, true);
+        this.transformRotateElements(true, true);
 
         super.init();
     }
@@ -244,9 +247,21 @@ export default class extends Core {
                             section.limit[this.directionAxis])
                 ) {
                     if (this.direction === 'horizontal') {
-                        this.transform(section.el, -this.instance.scroll[this.directionAxis], 0);
+                        this.transform(
+                            {
+                                element: section.el,
+                                x: -this.instance.scroll[this.directionAxis],
+                                y: 0
+                            }
+                        );
                     } else {
-                        this.transform(section.el, 0, -this.instance.scroll[this.directionAxis]);
+                        this.transform(
+                            {
+                                element:section.el,
+                                x:0,
+                                y:-this.instance.scroll[this.directionAxis]
+                            }
+                        );
                     }
 
                     if (!section.inView) {
@@ -263,7 +278,13 @@ export default class extends Core {
                         section.el.removeAttribute(`data-${this.name}-section-inview`);
                     }
 
-                    this.transform(section.el, 0, 0);
+                    this.transform(
+                        {
+                            element: section.el,
+                            x: 0,
+                            y: 0
+                        }
+                    );
                 }
             });
 
@@ -278,6 +299,7 @@ export default class extends Core {
 
             this.detectElements();
             this.transformElements();
+            this.transformRotateElements();
 
             if (this.hasScrollbar) {
                 const scrollBarTranslation =
@@ -285,9 +307,21 @@ export default class extends Core {
                         this.instance.limit[this.directionAxis]) *
                     this.scrollBarLimit[this.directionAxis];
                 if (this.direction === 'horizontal') {
-                    this.transform(this.scrollbarThumb, scrollBarTranslation, 0);
+                    this.transform(
+                        {
+                            element: this.scrollbarThumb,
+                            x: scrollBarTranslation,
+                            y: 0
+                        }
+                    );
                 } else {
-                    this.transform(this.scrollbarThumb, 0, scrollBarTranslation);
+                    this.transform(
+                        {
+                            element: this.scrollbarThumb,
+                            x: 0,
+                            y: scrollBarTranslation
+                        }
+                    );
                 }
             }
 
@@ -537,6 +571,9 @@ export default class extends Core {
     addElements() {
         this.els = {};
         this.parallaxElements = {};
+        this.rotateElements = {}
+
+        console.log("add")
 
         // this.sections.forEach((section, y) => {
         const els = this.el.querySelectorAll(`[data-${this.name}]`);
@@ -560,6 +597,9 @@ export default class extends Core {
             let position = el.dataset[this.name + 'Position'];
             let delay = el.dataset[this.name + 'Delay'];
             let direction = el.dataset[this.name + 'Direction'];
+            let rotate = typeof el.dataset[this.name + 'Rotate'] === 'string'
+                ? el.dataset[this.name + 'Rotate'].split(',')
+                : this.rotate;
             let sticky = typeof el.dataset[this.name + 'Sticky'] === 'string';
             let speed = el.dataset[this.name + 'Speed']
                 ? parseFloat(el.dataset[this.name + 'Speed']) / 10
@@ -689,7 +729,8 @@ export default class extends Core {
                 position,
                 target: targetEl,
                 direction,
-                sticky
+                sticky,
+                rotate
             };
 
             this.els[id] = mappedEl;
@@ -699,6 +740,10 @@ export default class extends Core {
 
             if (speed !== false || sticky) {
                 this.parallaxElements[id] = mappedEl;
+            }
+            
+            if (rotate && rotate.length > 1) {
+                this.rotateElements[id] = mappedEl
             }
         });
         // });
@@ -742,7 +787,7 @@ export default class extends Core {
         });
     }
 
-    transform(element, x, y, delay) {
+    transform({ element, x, y, delay }) {
         let transform;
 
         if (!delay) {
@@ -759,6 +804,7 @@ export default class extends Core {
         element.style.msTransform = transform;
         element.style.transform = transform;
     }
+
 
     transformElements(isForced, setAllElements = false) {
         const scrollRight = this.instance.scroll.x + this.windowWidth;
@@ -869,21 +915,63 @@ export default class extends Core {
                     (this.direction === 'horizontal' && current.direction !== 'vertical')
                 ) {
                     this.transform(
-                        current.el,
-                        transformDistance,
-                        0,
-                        isForced ? false : current.delay
+                        {
+                            element: current.el,
+                            x: transformDistance,
+                            y: 0,
+                            delay: isForced ? false : current.delay
+                        }
                     );
                 } else {
                     this.transform(
-                        current.el,
-                        0,
-                        transformDistance,
-                        isForced ? false : current.delay
+                        {
+                            element: current.el,
+                            x: 0,
+                            y: transformDistance,
+                            delay: isForced ? false : current.delay
+                        }
                     );
                 }
             }
         });
+    }
+
+    transformRotateElements(isForced, setAllElements = false) {
+        Object.entries(this.rotateElements).forEach(([i, current]) => {
+            if (current.inView || setAllElements) {
+                this.transformRotate({
+                    element: current.el,
+                    rotate: isForced ? [0, 0] : current.rotate,
+                    progress: current.progress
+                })
+            }
+        })
+    }
+
+    transformRotate({element, rotate, progress}) {
+        const degrees = map(progress, 0, 1, parseInt(rotate[0]), parseInt(rotate[1]))
+
+        let matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+        const {x, y} = getTranslate(element)
+        const toRadian = (degrees) => {
+            const pi = Math.PI;
+            return degrees * (pi/180);
+        }
+
+        // Rotate
+        matrix[0] = Math.cos(toRadian(degrees));
+        matrix[1] = Math.sin(toRadian(degrees));
+        matrix[4] = -Math.sin(toRadian(degrees));
+        matrix[5] = Math.cos(toRadian(degrees));
+
+        // X / Y
+        matrix[12] = x;
+        matrix[13] = y;
+
+        const transform = `matrix3d(${matrix.join(',')})`
+        element.style.webkitTransform = transform;
+        element.style.msTransform = transform;
+        element.style.transform = transform;
     }
 
     /**
@@ -1022,6 +1110,7 @@ export default class extends Core {
         this.detectElements();
         this.updateScroll();
         this.transformElements(true);
+        this.transformRotateElements(true);
         this.reinitScrollBar();
 
         this.checkScroll(true);
