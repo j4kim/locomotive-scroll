@@ -4,7 +4,6 @@ import { lerp, map } from './utils/maths';
 import { getTranslate } from './utils/transform';
 import { getParents, queryClosestParent } from './utils/html';
 import BezierEasing from 'bezier-easing';
-import * as Rematrix from 'rematrix'
 
 const keyCodes = {
     LEFT: 37,

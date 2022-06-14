@@ -32,7 +32,6 @@
     },
     "dependencies": {
         "bezier-easing": "^2.1.0",
-        "rematrix": "^0.7.2",
         "smoothscroll-polyfill": "^0.4.4",
         "virtual-scroll": "^1.5.2"
     }
